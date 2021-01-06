@@ -66,7 +66,59 @@ public class ClientApp {
     }
 
     private void pollPlants() {
+        while (!terminate){
+            int nbrOfPlants;
+            int[] plantKeys;
+            synchronized (lockPlants){
+                plantKeys = new int[plants.size()];
+                nbrOfPlants = plantKeys.length;
+                int counter = 0;
+                for (int i : plants.keySet()){
+                    plantKeys[counter] = i;
+                    counter++;
+                }
+            }
 
+            for (int i = 0; i<nbrOfPlants; i++){
+                synchronized (lockPlants){
+                    Plant plant = plants.get(plantKeys[i]);
+                    if (plant.isEnabled()){
+                        long currentMillis = System.currentTimeMillis();
+                        boolean presentBefore = plant.isPresent();
+                        double[] stateBefore = plant.getState();
+
+                        //Check if gadget needs polling
+                        if ((currentMillis -plant.getLastPollTime()) > (plant.getPollDelaySec() * 1000L)){
+                            try {
+                                plant.poll();
+
+                                if (plant.isPresent()){
+                                    plant.setLastPollTime(System.currentTimeMillis());
+                                }
+
+                                if (presentBefore != plant.isPresent()){
+                                    if (plant.isPresent()){
+                                        //Plant has become available again
+                                        //Could notify clients here if system were full duplex
+
+                                    } else {
+                                        //Plant is no longer available
+                                        //Could notify clients here if system were full duplex
+                                    }
+                                } else if (plant.isPresent()){
+                                    if (stateBefore != plant.getState()){
+                                        //New state of plant is detected, update the list
+                                        //Could notify clients here if system were full duplex
+                                    }
+                                }
+                            }catch (Exception e){
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private void inputFromClients() {
@@ -92,11 +144,13 @@ public class ClientApp {
                 String ip = (String) plant.get("ip");
                 int port = Integer.parseInt(String.valueOf(plant.get("port")));
                 int pollDelaySec = Integer.parseInt(String.valueOf(plant.get("pollDelaySec")));
-                int soilHumidLimit= Integer.parseInt(String.valueOf(plant.get("soilHumidLimit")));
+                double soilHumidLimit= Double.parseDouble(String.valueOf(plant.get("soilHumidLimit")));
                 String alias = (String) plant.get("alias");
                 int id = Integer.parseInt(String.valueOf(plant.get("id")));
+                boolean enable = (Boolean) plant.get("enable");
+                double openWaterFlowSec = Double.parseDouble(String.valueOf(plant.get("openWaterFlowSec")));
 
-                Plant newPlant = new Plant(ip, port, pollDelaySec, soilHumidLimit, alias, id);
+                Plant newPlant = new Plant(ip, port, pollDelaySec, soilHumidLimit, alias, id, enable,openWaterFlowSec);
                 plants.put(id, newPlant);
             }
         } catch (Exception e) {
@@ -109,8 +163,7 @@ public class ClientApp {
         if (!plants.isEmpty()) {
             System.out.println("=== ALL Plants ===");
             for (int key : plants.keySet()) {
-                System.out.println("Alias: " + plants.get(key).getAlias() + "\n" +
-                        "State: " + plants.get(key).getSoilHumidLimit() + "\n" + "Present: " + plants.get(key).isPresent());
+                System.out.println(plants.get(key).getPlantInfo());
             }
             System.out.println("====================");
         }
