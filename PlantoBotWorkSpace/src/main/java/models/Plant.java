@@ -1,30 +1,83 @@
 package models;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+
 public class Plant {
+
+    private BufferedWriter output;
+    private BufferedReader input;
+    private Socket socket;
+    private String alias;
+    private int id;
     private String ip;
     private int port;
     private int pollDelaySec;
-    private int soilHumidLimit;
-    private String alias;
-    private int id;
-    private long lastPollTime;
+    private double openWaterFlowSec;
+    private double soilHumidLimit;
     private String lastWatered;
+    private double[] state;
+    private long lastPollTime;
     private volatile boolean isPresent;
+    private volatile boolean enabled;
 
-    public Plant(String ip, int port, int pollDelaySec, int soilHumidity, String alias, int id) {
+
+    public Plant(String ip, int port, int pollDelaySec, double soilHumidLimit, String alias, int id, boolean enabled, double openWaterFlowSec) {
         this.ip = ip;
         this.port = port;
         this.pollDelaySec = pollDelaySec;
-        this.soilHumidLimit = soilHumidity;
+        this.soilHumidLimit = soilHumidLimit;
         this.alias = alias;
         this.id = id;
         this.lastPollTime = 0;
         this.lastWatered = null;
         this.isPresent = false;
+        this.enabled = enabled;
+        this.openWaterFlowSec = openWaterFlowSec;
+        this.state = new double[4]; //In the following order; {soilHumidity, airHumidity, airTemp, lightExposure}
     }
 
     public void poll(){
         //TODO should poll the plant and expects an answer back.
+        try{
+            String response = sendCommand("{\"command\": 1003}");
+
+            String[] splittedRequest = response.split("::");
+            if (splittedRequest[0].equalsIgnoreCase("1004")) {
+                setState(new double[]{Double.parseDouble(splittedRequest[1]),Double.parseDouble(splittedRequest[2]),
+                        Double.parseDouble(splittedRequest[3]),Double.parseDouble(splittedRequest[4])});
+                setPresent(true);
+                return;
+            }
+        }catch (Exception e){
+            setPresent(false);
+            System.out.println("Plant is not present, ID: " + this.id);
+        }
+    }
+
+    private String sendCommand(String command) throws Exception{
+        try {
+            this.socket = new Socket();
+            this.socket.connect(new InetSocketAddress(this.ip,this.port), 2500);
+            this.socket.setSoTimeout(4000);
+            this.input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            this.output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+
+            this.output.write(command.concat("\n"));
+            this.output.flush();
+
+            return input.readLine();
+        }catch (Exception e){
+            throw new Exception("Unable to communicate with plant.");
+        } finally {
+            if (this.socket != null){
+                this.socket.close();
+            }
+        }
     }
 
     public String getIp() {
@@ -51,11 +104,11 @@ public class Plant {
         this.pollDelaySec = pollDelaySec;
     }
 
-    public int getSoilHumidLimit() {
+    public double getSoilHumidLimit() {
         return soilHumidLimit;
     }
 
-    public void setSoilHumidLimit(int soilHumidLimit) {
+    public void setSoilHumidLimit(double soilHumidLimit) {
         this.soilHumidLimit = soilHumidLimit;
     }
 
@@ -97,5 +150,48 @@ public class Plant {
 
     public void setPresent(boolean present) {
         isPresent = present;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public double[] getState() {
+        return state;
+    }
+
+    public void setState(double[] state) {
+        this.state = state;
+    }
+
+    public double getOpenWaterFlowSec() {
+        return openWaterFlowSec;
+    }
+
+    public void setOpenWaterFlowSec(double openWaterFlowSec) {
+        this.openWaterFlowSec = openWaterFlowSec;
+    }
+
+    public String getPlantInfo(){
+        return "State: " + stateToProto() +"\n" +
+                "IP: " + this.ip +"\n" +
+                "ID: " + this.id + "\n" +
+                "PORT: " + this.port + "\n" +
+                "Alias: " + this.alias + "\n" +
+                "Last watered: " + this.lastWatered + "\n" +
+                "Last polled: " + this.lastPollTime + "\n" +
+                "OpenWaterFlowSec: " + this.openWaterFlowSec + "\n" +
+                "PollDelaySec: " + this.pollDelaySec + "\n";
+
+
+
+    }
+
+    public String stateToProto(){
+        return state[0] + "::" + state[1] + "::" + state[2] + "::" + state[3];
     }
 }
