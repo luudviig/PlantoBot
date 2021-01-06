@@ -41,28 +41,28 @@ public class Plant {
         this.state = new double[4]; //In the following order; {soilHumidity, airHumidity, airTemp, lightExposure}
     }
 
-    public void poll(){
+    public void poll() {
         //TODO should poll the plant and expects an answer back.
-        try{
+        try {
             String response = sendCommand("{\"command\": 1003}");
 
             String[] splittedRequest = response.split("::");
             if (splittedRequest[0].equalsIgnoreCase("1004")) {
-                setState(new double[]{Double.parseDouble(splittedRequest[1]),Double.parseDouble(splittedRequest[2]),
-                        Double.parseDouble(splittedRequest[3]),Double.parseDouble(splittedRequest[4])});
+                setState(new double[]{Double.parseDouble(splittedRequest[1]), Double.parseDouble(splittedRequest[2]),
+                        Double.parseDouble(splittedRequest[3]), Double.parseDouble(splittedRequest[4])});
                 setPresent(true);
                 return;
             }
-        }catch (Exception e){
+        } catch (Exception e) {
             setPresent(false);
             System.out.println("Plant is not present, ID: " + this.id);
         }
     }
 
-    private String sendCommand(String command) throws Exception{
+    private String sendCommand(String command) throws Exception {
         try {
             this.socket = new Socket();
-            this.socket.connect(new InetSocketAddress(this.ip,this.port), 2500);
+            this.socket.connect(new InetSocketAddress(this.ip, this.port), 2500);
             this.socket.setSoTimeout(4000);
             this.input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             this.output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
@@ -71,10 +71,10 @@ public class Plant {
             this.output.flush();
 
             return input.readLine();
-        }catch (Exception e){
+        } catch (Exception e) {
             throw new Exception("Unable to communicate with plant.");
         } finally {
-            if (this.socket != null){
+            if (this.socket != null) {
                 this.socket.close();
             }
         }
@@ -176,22 +176,26 @@ public class Plant {
         this.openWaterFlowSec = openWaterFlowSec;
     }
 
-    public String getPlantInfo(){
-        return "State: " + stateToProto() +"\n" +
-                "IP: " + this.ip +"\n" +
+    public String getPlantInfo() {
+        return "State: " + stateToProto() + "\n" +
+                "IP: " + this.ip + "\n" +
                 "ID: " + this.id + "\n" +
                 "PORT: " + this.port + "\n" +
                 "Alias: " + this.alias + "\n" +
                 "Last watered: " + this.lastWatered + "\n" +
                 "Last polled: " + this.lastPollTime + "\n" +
                 "OpenWaterFlowSec: " + this.openWaterFlowSec + "\n" +
-                "PollDelaySec: " + this.pollDelaySec + "\n";
-
-
-
+                "PollDelaySec: " + this.pollDelaySec + "\n" +
+                "Is present: " + this.isPresent + "\n" +
+                "Enabled: " + this.enabled + "\n" +
+                "SoilHumidLimit: " + this.soilHumidLimit + "\n";
     }
 
-    public String stateToProto(){
-        return state[0] + "::" + state[1] + "::" + state[2] + "::" + state[3];
+    public String toHosoProtocol(){
+        return this.lastWatered + "::" + lastPollTime + "::" + stateToProto();
+    }
+
+    public String stateToProto() {
+        return state[0] + "::" + state[1] + "::" + state[2] + "::" + state[3] + "::";
     }
 }

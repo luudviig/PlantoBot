@@ -1,6 +1,7 @@
 package mainPackage;
 
 
+import communicationResources.ClientHandler;
 import models.Plant;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -8,15 +9,18 @@ import org.json.simple.parser.JSONParser;
 
 import java.io.File;
 import java.io.FileReader;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.HashMap;
 
 public class ClientApp {
 
-    private HashMap<Integer, Plant> plants;
+    public HashMap<Integer, Plant> plants;
     private final Object lockPlants;
     private final Object lockClose;
     private volatile boolean terminate;
     private Thread pollingThread;
+    private ServerSocket serverSocket;
 
     // When run from IDE
     private static final String plants_JSON = (new File(System.getProperty("user.dir")).getParentFile().getPath()).concat("/plants.json");
@@ -38,6 +42,13 @@ public class ClientApp {
         this.lockPlants = new Object();
         this.lockClose = new Object();
         this.terminate = false;
+        try {
+            serverSocket = new ServerSocket(9999);
+            serverSocket.setReuseAddress(true);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
 
         this.pollingThread = new Thread(new Runnable() {
             @Override
@@ -54,50 +65,53 @@ public class ClientApp {
             readPlantsFile();
 
             //Start polling thread
-            //pollingThread.start();
+            pollingThread.start();
+
+            //Print all plants
+            printAllPlants();
 
             //Wait from input from android
+            inputFromClients();
 
-            printAllPlants();
-        }catch (Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
             System.out.println(e.getMessage());
         }
     }
 
     private void pollPlants() {
-        while (!terminate){
+        while (!terminate) {
             int nbrOfPlants;
             int[] plantKeys;
-            synchronized (lockPlants){
+            synchronized (lockPlants) {
                 plantKeys = new int[plants.size()];
                 nbrOfPlants = plantKeys.length;
                 int counter = 0;
-                for (int i : plants.keySet()){
+                for (int i : plants.keySet()) {
                     plantKeys[counter] = i;
                     counter++;
                 }
             }
 
-            for (int i = 0; i<nbrOfPlants; i++){
-                synchronized (lockPlants){
+            for (int i = 0; i < nbrOfPlants; i++) {
+                synchronized (lockPlants) {
                     Plant plant = plants.get(plantKeys[i]);
-                    if (plant.isEnabled()){
+                    if (plant.isEnabled()) {
                         long currentMillis = System.currentTimeMillis();
                         boolean presentBefore = plant.isPresent();
                         double[] stateBefore = plant.getState();
 
                         //Check if gadget needs polling
-                        if ((currentMillis -plant.getLastPollTime()) > (plant.getPollDelaySec() * 1000L)){
+                        if ((currentMillis - plant.getLastPollTime()) > (plant.getPollDelaySec() * 1000L)) {
                             try {
                                 plant.poll();
 
-                                if (plant.isPresent()){
+                                if (plant.isPresent()) {
                                     plant.setLastPollTime(System.currentTimeMillis());
                                 }
 
-                                if (presentBefore != plant.isPresent()){
-                                    if (plant.isPresent()){
+                                if (presentBefore != plant.isPresent()) {
+                                    if (plant.isPresent()) {
                                         //Plant has become available again
                                         //Could notify clients here if system were full duplex
 
@@ -105,24 +119,54 @@ public class ClientApp {
                                         //Plant is no longer available
                                         //Could notify clients here if system were full duplex
                                     }
-                                } else if (plant.isPresent()){
-                                    if (stateBefore != plant.getState()){
+                                } else if (plant.isPresent()) {
+                                    if (stateBefore != plant.getState()) {
                                         //New state of plant is detected, update the list
                                         //Could notify clients here if system were full duplex
                                     }
                                 }
-                            }catch (Exception e){
+                            } catch (Exception e) {
 
                             }
                         }
                     }
                 }
             }
+            try {
+                Thread.sleep(20);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 
     private void inputFromClients() {
+        while (!terminate) {
+            try {
+                Socket client = serverSocket.accept();
+                System.out.println("New client connected");
 
+                //Launches each client on a new thread that handles the request.
+                ClientHandler clientHandler = new ClientHandler(client);
+                clientHandler.startThread();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public String getPlantInformationToProto() {
+        StringBuilder protocolString = new StringBuilder();
+        int amountOfPlants = 0;
+        synchronized (lockPlants) {
+            for (int plant : plants.keySet()) {
+                if (plants.get(plant).isPresent() && plants.get(plant).isEnabled()) {
+                    amountOfPlants++;
+                    protocolString.append(plants.get(plant).toHosoProtocol());
+                }
+            }
+        }
+        return amountOfPlants + "::" + protocolString;
     }
 
     public void closeServer() {
@@ -144,13 +188,13 @@ public class ClientApp {
                 String ip = (String) plant.get("ip");
                 int port = Integer.parseInt(String.valueOf(plant.get("port")));
                 int pollDelaySec = Integer.parseInt(String.valueOf(plant.get("pollDelaySec")));
-                double soilHumidLimit= Double.parseDouble(String.valueOf(plant.get("soilHumidLimit")));
+                double soilHumidLimit = Double.parseDouble(String.valueOf(plant.get("soilHumidLimit")));
                 String alias = (String) plant.get("alias");
                 int id = Integer.parseInt(String.valueOf(plant.get("id")));
                 boolean enable = (Boolean) plant.get("enable");
                 double openWaterFlowSec = Double.parseDouble(String.valueOf(plant.get("openWaterFlowSec")));
 
-                Plant newPlant = new Plant(ip, port, pollDelaySec, soilHumidLimit, alias, id, enable,openWaterFlowSec);
+                Plant newPlant = new Plant(ip, port, pollDelaySec, soilHumidLimit, alias, id, enable, openWaterFlowSec);
                 plants.put(id, newPlant);
             }
         } catch (Exception e) {
@@ -159,7 +203,7 @@ public class ClientApp {
         }
     }
 
-    private void printAllPlants(){
+    private void printAllPlants() {
         if (!plants.isEmpty()) {
             System.out.println("=== ALL Plants ===");
             for (int key : plants.keySet()) {
