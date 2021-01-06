@@ -43,7 +43,7 @@ public class ClientApp {
         this.lockClose = new Object();
         this.terminate = false;
         try {
-            serverSocket = new ServerSocket(9999);
+            serverSocket = new ServerSocket(7777);
             serverSocket.setReuseAddress(true);
         } catch (Exception e) {
             e.printStackTrace();
@@ -121,12 +121,15 @@ public class ClientApp {
                                     }
                                 } else if (plant.isPresent()) {
                                     if (stateBefore != plant.getState()) {
-                                        //New state of plant is detected, update the list
                                         //Could notify clients here if system were full duplex
+                                    }
+                                    //Check if plant needs to be watered
+                                    if (plant.getState()[0] <= plant.getSoilHumidLimit()){
+                                        plant.water();
                                     }
                                 }
                             } catch (Exception e) {
-
+                                System.out.println("Problem polling the plant.");
                             }
                         }
                     }
@@ -173,7 +176,7 @@ public class ClientApp {
         synchronized (lockClose) {
             if (!terminate) {
                 terminate = true;
-                //TODO close communication with all clients. Close polling thread?
+                //TODO close communication with all clients. Close polling thread? close serverSocket?
             }
         }
     }

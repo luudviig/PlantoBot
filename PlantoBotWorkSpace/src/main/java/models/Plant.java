@@ -51,11 +51,11 @@ public class Plant {
                 setState(new double[]{Double.parseDouble(splittedRequest[1]), Double.parseDouble(splittedRequest[2]),
                         Double.parseDouble(splittedRequest[3]), Double.parseDouble(splittedRequest[4])});
                 setPresent(true);
-                return;
             }
         } catch (Exception e) {
             setPresent(false);
-            System.out.println("Plant is not present, ID: " + this.id);
+            System.out.println(e.getMessage());
+            System.out.println("Plant is not present, ID (Poll method): " + this.id);
         }
     }
 
@@ -78,6 +78,23 @@ public class Plant {
                 this.socket.close();
             }
         }
+    }
+
+    public void water() throws Exception {
+        try {
+            String[] response = sendCommand("1005::" + this.openWaterFlowSec).split("::");
+
+            if (response[0].equalsIgnoreCase("1004")) {
+                setState(new double[]{Double.parseDouble(response[1]), Double.parseDouble(response[2]),
+                        Double.parseDouble(response[3]), Double.parseDouble(response[4])});
+                setPresent(true);
+            }
+        } catch (Exception e) {
+            setPresent(false);
+            System.out.println(e.getMessage());
+            System.out.println("Plant is not present, ID (Watering-method): " + this.id);
+        }
+
     }
 
     public String getIp() {
@@ -191,7 +208,7 @@ public class Plant {
                 "SoilHumidLimit: " + this.soilHumidLimit + "\n";
     }
 
-    public String toHosoProtocol(){
+    public String toHosoProtocol() {
         return this.lastWatered + "::" + lastPollTime + "::" + stateToProto();
     }
 
