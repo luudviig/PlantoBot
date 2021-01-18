@@ -1,8 +1,9 @@
 package mainPackage;
 
-
 import communicationResources.ClientHandler;
 import models.Plant;
+import models.Settings;
+import models.SoilHumidityLimit;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -21,12 +22,18 @@ public class ClientApp {
     private volatile boolean terminate;
     private Thread pollingThread;
     private ServerSocket serverSocket;
+    private Settings settings;
+
+    //TODO Fix so when a client connects it has 2seconds to send a request according to the protocol or it is thrown out.
 
     // When run from IDE
     private static final String plants_JSON = (new File(System.getProperty("user.dir")).getParentFile().getPath()).concat("/plants.json");
+    private static final String config_JSON = (new File(System.getProperty("user.dir")).getParentFile().getPath()).concat("/config.json");
 
     // When run as JAR on Linux
     //private static final String plants_JSON = "./plants.json";
+    //private static final String config_JSON = "./config.json";
+
 
     private static ClientApp instance = null;
 
@@ -61,18 +68,21 @@ public class ClientApp {
     public void startServer() {
         System.out.println("Server Started \n");
         try {
-            //Read from file
+            //Read from files
             readPlantsFile();
+            readSettingsFile();
 
             //Start polling thread
             pollingThread.start();
 
+            //Print settings
+            printSettings();
             //Print all plants
             printAllPlants();
 
+
             //Wait from input from android
             inputFromClients();
-
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println(e.getMessage());
@@ -123,8 +133,7 @@ public class ClientApp {
                                     if (stateBefore != plant.getState()) {
                                         //Could notify clients here if system were full duplex
                                     }
-                                    //Check if plant needs to be watered
-                                    if (plant.getState()[0] <= plant.getSoilHumidLimit()){
+                                    if (needsWatering(plant)) {
                                         plant.water();
                                     }
                                 }
@@ -136,11 +145,38 @@ public class ClientApp {
                 }
             }
             try {
-                Thread.sleep(20);
+                Thread.sleep(50);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    private boolean needsWatering(Plant plant) {
+        boolean needsWater = false;
+        if (plant.getSoilHumidLimit().equals(SoilHumidityLimit.DRY)) {
+            //DRY
+            if (plant.getState()[0] <= 150) {
+                needsWater = true;
+            }
+        } else if (plant.getSoilHumidLimit().equals(SoilHumidityLimit.MOIST)) {
+            //MOIST
+            if (plant.getState()[0] <= 600) {
+                needsWater = true;
+            }
+        } else if (plant.getSoilHumidLimit().equals(SoilHumidityLimit.WET)) {
+            //WET
+            if (plant.getState()[0] <= 800) {
+                needsWater = true;
+            }
+        }
+
+        if (needsWater) {
+            System.out.println("Plant needs water [" + plant.getSoilHumidLimit() + "]");
+            System.out.println("Plant soilhumidity: " + plant.getState()[0]);
+        }
+
+        return needsWater;
     }
 
     private void inputFromClients() {
@@ -153,7 +189,7 @@ public class ClientApp {
                 ClientHandler clientHandler = new ClientHandler(client);
                 clientHandler.startThread();
             } catch (Exception e) {
-                e.printStackTrace();
+                System.out.println(e.getMessage());
             }
         }
     }
@@ -191,7 +227,7 @@ public class ClientApp {
                 String ip = (String) plant.get("ip");
                 int port = Integer.parseInt(String.valueOf(plant.get("port")));
                 int pollDelaySec = Integer.parseInt(String.valueOf(plant.get("pollDelaySec")));
-                double soilHumidLimit = Double.parseDouble(String.valueOf(plant.get("soilHumidLimit")));
+                SoilHumidityLimit soilHumidLimit = SoilHumidityLimit.valueOf(String.valueOf(plant.get("soilHumidLimit")));
                 String alias = (String) plant.get("alias");
                 int id = Integer.parseInt(String.valueOf(plant.get("id")));
                 boolean enable = (Boolean) plant.get("enable");
@@ -206,13 +242,35 @@ public class ClientApp {
         }
     }
 
+    private void readSettingsFile() throws Exception {
+        try {
+            JSONParser parser = new JSONParser();
+            JSONObject plant = (JSONObject) parser.parse(new FileReader(config_JSON));
+
+            boolean debugMode = Boolean.parseBoolean(String.valueOf(plant.get("debugMode")));
+            String alias = (String) plant.get("hubAlias");
+
+            settings = new Settings(debugMode, alias);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new Exception(e.getMessage());
+        }
+    }
+
     private void printAllPlants() {
         if (!plants.isEmpty()) {
-            System.out.println("=== ALL Plants ===");
+            System.out.println("\n\n=== ALL Plants ===");
             for (int key : plants.keySet()) {
                 System.out.println(plants.get(key).getPlantInfo());
             }
-            System.out.println("====================");
+            System.out.println("====================\n\n");
         }
+    }
+
+    private void printSettings() {
+        System.out.println("\n\n=== SETTINGS ===");
+        System.out.println(settings.printSettingsInfo());
+        System.out.println("=================\n\n");
     }
 }

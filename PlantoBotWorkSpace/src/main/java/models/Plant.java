@@ -6,6 +6,8 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class Plant {
 
@@ -18,15 +20,15 @@ public class Plant {
     private int port;
     private int pollDelaySec;
     private double openWaterFlowSec;
-    private double soilHumidLimit;
-    private String lastWatered;
+    private SoilHumidityLimit soilHumidLimit;
+    private long lastWatered;
     private double[] state;
     private long lastPollTime;
     private volatile boolean isPresent;
     private volatile boolean enabled;
 
 
-    public Plant(String ip, int port, int pollDelaySec, double soilHumidLimit, String alias, int id, boolean enabled, double openWaterFlowSec) {
+    public Plant(String ip, int port, int pollDelaySec, SoilHumidityLimit soilHumidLimit, String alias, int id, boolean enabled, double openWaterFlowSec) {
         this.ip = ip;
         this.port = port;
         this.pollDelaySec = pollDelaySec;
@@ -34,7 +36,7 @@ public class Plant {
         this.alias = alias;
         this.id = id;
         this.lastPollTime = 0;
-        this.lastWatered = null;
+        this.lastWatered = 0;
         this.isPresent = false;
         this.enabled = enabled;
         this.openWaterFlowSec = openWaterFlowSec;
@@ -42,7 +44,6 @@ public class Plant {
     }
 
     public void poll() {
-        //TODO should poll the plant and expects an answer back.
         try {
             String response = sendCommand("{\"command\": 1003}");
 
@@ -82,19 +83,29 @@ public class Plant {
 
     public void water() throws Exception {
         try {
-            String[] response = sendCommand("1005::" + this.openWaterFlowSec).split("::");
+            String[] response = sendCommand("{\"command\":1005, \"openWaterFlowSec\":" + this.openWaterFlowSec + "}").split("::");
 
             if (response[0].equalsIgnoreCase("1004")) {
                 setState(new double[]{Double.parseDouble(response[1]), Double.parseDouble(response[2]),
                         Double.parseDouble(response[3]), Double.parseDouble(response[4])});
                 setPresent(true);
             }
+            lastWatered = System.currentTimeMillis();
+            System.out.println(getPlantInfo());
         } catch (Exception e) {
             setPresent(false);
             System.out.println(e.getMessage());
             System.out.println("Plant is not present, ID (Watering-method): " + this.id);
         }
 
+    }
+
+    public String lastMillisToSimpleDate(long millis) {
+        // Millis to date
+        Date resultDate = new Date(millis);
+        String pattern = "yyyy-MM-dd HH:mm";
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
+        return simpleDateFormat.format(resultDate);
     }
 
     public String getIp() {
@@ -121,11 +132,11 @@ public class Plant {
         this.pollDelaySec = pollDelaySec;
     }
 
-    public double getSoilHumidLimit() {
+    public SoilHumidityLimit getSoilHumidLimit() {
         return soilHumidLimit;
     }
 
-    public void setSoilHumidLimit(double soilHumidLimit) {
+    public void setSoilHumidLimit(SoilHumidityLimit soilHumidLimit) {
         this.soilHumidLimit = soilHumidLimit;
     }
 
@@ -153,11 +164,11 @@ public class Plant {
         this.lastPollTime = lastPollTime;
     }
 
-    public String getLastWatered() {
+    public long getLastWatered() {
         return lastWatered;
     }
 
-    public void setLastWatered(String lastWatered) {
+    public void setLastWatered(long lastWatered) {
         this.lastWatered = lastWatered;
     }
 
@@ -194,18 +205,21 @@ public class Plant {
     }
 
     public String getPlantInfo() {
-        return "State: " + stateToProto() + "\n" +
+        return "SoilHumidity: " + state[0] + "\n" +
+                "AirHumidity: " + state[1] + "\n" +
+                "AirTemp: " + state[2] + "\n" +
+                "LightExposure: " + state[3] + "\n" +
                 "IP: " + this.ip + "\n" +
                 "ID: " + this.id + "\n" +
                 "PORT: " + this.port + "\n" +
                 "Alias: " + this.alias + "\n" +
-                "Last watered: " + this.lastWatered + "\n" +
-                "Last polled: " + this.lastPollTime + "\n" +
+                "Last watered: " + lastMillisToSimpleDate(lastWatered) + "\n" +
+                "Last polled: " + lastMillisToSimpleDate(lastPollTime) + "\n" +
                 "OpenWaterFlowSec: " + this.openWaterFlowSec + "\n" +
                 "PollDelaySec: " + this.pollDelaySec + "\n" +
                 "Is present: " + this.isPresent + "\n" +
                 "Enabled: " + this.enabled + "\n" +
-                "SoilHumidLimit: " + this.soilHumidLimit + "\n";
+                "SoilHumidLimit: " + this.soilHumidLimit;
     }
 
     public String toHosoProtocol() {
