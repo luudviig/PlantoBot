@@ -1,5 +1,7 @@
 package models;
 
+import mainPackage.ClientApp;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.InputStreamReader;
@@ -26,9 +28,12 @@ public class Plant {
     private long lastPollTime;
     private volatile boolean isPresent;
     private volatile boolean enabled;
+    private volatile boolean waterTankEmpty;
+    private double waterTankHeight;
+    private double distanceToWater;
 
 
-    public Plant(String ip, int port, int pollDelaySec, SoilHumidityLimit soilHumidLimit, String alias, int id, boolean enabled, double openWaterFlowSec) {
+    public Plant(String ip, int port, int pollDelaySec, SoilHumidityLimit soilHumidLimit, String alias, int id, boolean enabled, double openWaterFlowSec, double waterTankHeight) {
         this.ip = ip;
         this.port = port;
         this.pollDelaySec = pollDelaySec;
@@ -41,6 +46,9 @@ public class Plant {
         this.enabled = enabled;
         this.openWaterFlowSec = openWaterFlowSec;
         this.state = new double[4]; //In the following order; {soilHumidity, airHumidity, airTemp, lightExposure}
+        this.waterTankEmpty = false;
+        this.waterTankHeight = waterTankHeight;
+        this.distanceToWater = 0;
     }
 
     public void poll() {
@@ -51,12 +59,15 @@ public class Plant {
             if (splittedRequest[0].equalsIgnoreCase("1004")) {
                 setState(new double[]{Double.parseDouble(splittedRequest[1]), Double.parseDouble(splittedRequest[2]),
                         Double.parseDouble(splittedRequest[3]), Double.parseDouble(splittedRequest[4])});
+                distanceToWater = Double.parseDouble(splittedRequest[5]);
+
+                //Calculate If water tank empty
+                calculateWaterTankEmpty();
+
                 setPresent(true);
             }
         } catch (Exception e) {
             setPresent(false);
-            System.out.println(e.getMessage());
-            System.out.println("Plant is not present, ID (Poll method): " + this.id);
         }
     }
 
@@ -82,22 +93,39 @@ public class Plant {
     }
 
     public void water() throws Exception {
+        //Different limits for testing.
+        //long limitDay = 86_400 * 1000;
+        //long halfDay = limitDay / 2;
+        //long limit5Minutes =300*1000;
+        //long limit10Minutes = 600*1000;
+        long limit10Seconds = 10*1000;
         try {
-            String[] response = sendCommand("{\"command\":1005, \"openWaterFlowSec\":" + this.openWaterFlowSec + "}").split("::");
+            if (!calculateWaterTankEmpty() && (System.currentTimeMillis() - lastWatered >= limit10Seconds)) { //This makes so the plant is only allowed to be watered once in 24h.
+                ClientApp.getInstance().debugLog("Watering plant. " + lastMillisToSimpleDate(System.currentTimeMillis()));
 
-            if (response[0].equalsIgnoreCase("1004")) {
-                setState(new double[]{Double.parseDouble(response[1]), Double.parseDouble(response[2]),
-                        Double.parseDouble(response[3]), Double.parseDouble(response[4])});
-                setPresent(true);
+                String[] response = sendCommand("{\"command\":1005, \"openWaterFlowSec\":" + this.openWaterFlowSec + "}").split("::");
+
+                if (response[0].equalsIgnoreCase("1004")) {
+                    setState(new double[]{Double.parseDouble(response[1]), Double.parseDouble(response[2]),
+                            Double.parseDouble(response[3]), Double.parseDouble(response[4])});
+                    distanceToWater = Double.parseDouble(response[5]);
+                    setPresent(true);
+                }
+                lastWatered = System.currentTimeMillis();
             }
-            lastWatered = System.currentTimeMillis();
-            System.out.println(getPlantInfo());
         } catch (Exception e) {
             setPresent(false);
-            System.out.println(e.getMessage());
-            System.out.println("Plant is not present, ID (Watering-method): " + this.id);
         }
+    }
 
+    public boolean calculateWaterTankEmpty() {
+        if (distanceToWater >= (waterTankHeight - 4)) { //4cm of marginal to not destroy the water pump
+            waterTankEmpty = true;
+            return true;
+        } else {
+            waterTankEmpty = false;
+            return false;
+        }
     }
 
     public String lastMillisToSimpleDate(long millis) {
@@ -106,6 +134,22 @@ public class Plant {
         String pattern = "yyyy-MM-dd HH:mm";
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
         return simpleDateFormat.format(resultDate);
+    }
+
+    public boolean isWaterTankEmpty() {
+        return waterTankEmpty;
+    }
+
+    public void setWaterTankEmpty(boolean waterTankEmpty) {
+        this.waterTankEmpty = waterTankEmpty;
+    }
+
+    public double getWaterTankHeight() {
+        return waterTankHeight;
+    }
+
+    public void setWaterTankHeight(double waterTankHeight) {
+        this.waterTankHeight = waterTankHeight;
     }
 
     public String getIp() {
@@ -219,14 +263,16 @@ public class Plant {
                 "PollDelaySec: " + this.pollDelaySec + "\n" +
                 "Is present: " + this.isPresent + "\n" +
                 "Enabled: " + this.enabled + "\n" +
-                "SoilHumidLimit: " + this.soilHumidLimit;
+                "SoilHumidLimit: " + this.soilHumidLimit + "\n" +
+                "Empty Water Tank: " + this.waterTankEmpty + "\n" +
+                "Water Water Height: " + this.waterTankHeight + " cm";
     }
 
     public String toHosoProtocol() {
-        return this.lastWatered + "::" + lastPollTime + "::" + stateToProto();
+        return id + "::" + alias + "::" + lastMillisToSimpleDate(lastWatered) + "::" + lastMillisToSimpleDate(lastPollTime) + "::" + stateToProto() + "::" + ClientApp.getInstance().settings.getAlias() + "::" + waterTankEmpty;
     }
 
     public String stateToProto() {
-        return state[0] + "::" + state[1] + "::" + state[2] + "::" + state[3] + "::";
+        return state[0] + "::" + state[1] + "::" + state[2] + "::" + state[3];
     }
 }

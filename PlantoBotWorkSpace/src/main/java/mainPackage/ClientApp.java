@@ -22,7 +22,7 @@ public class ClientApp {
     private volatile boolean terminate;
     private Thread pollingThread;
     private ServerSocket serverSocket;
-    private Settings settings;
+    public Settings settings;
 
     //TODO Fix so when a client connects it has 2seconds to send a request according to the protocol or it is thrown out.
 
@@ -80,12 +80,11 @@ public class ClientApp {
             //Print all plants
             printAllPlants();
 
-
             //Wait from input from android
             inputFromClients();
         } catch (Exception e) {
             e.printStackTrace();
-            System.out.println(e.getMessage());
+            debugLog(e.getMessage());
         }
     }
 
@@ -135,19 +134,21 @@ public class ClientApp {
                                     }
                                     if (needsWatering(plant)) {
                                         plant.water();
+                                        printPresentPlants();
                                     }
                                 }
                             } catch (Exception e) {
-                                System.out.println("Problem polling the plant.");
+                                debugLog("Problem polling the plant");
                             }
                         }
                     }
                 }
             }
+
             try {
                 Thread.sleep(50);
             } catch (Exception e) {
-                e.printStackTrace();
+                debugLog(getInstance().getPlantInformationToProto());
             }
         }
     }
@@ -161,7 +162,7 @@ public class ClientApp {
             }
         } else if (plant.getSoilHumidLimit().equals(SoilHumidityLimit.MOIST)) {
             //MOIST
-            if (plant.getState()[0] <= 600) {
+            if (plant.getState()[0] <= 610) {
                 needsWater = true;
             }
         } else if (plant.getSoilHumidLimit().equals(SoilHumidityLimit.WET)) {
@@ -170,12 +171,6 @@ public class ClientApp {
                 needsWater = true;
             }
         }
-
-        if (needsWater) {
-            System.out.println("Plant needs water [" + plant.getSoilHumidLimit() + "]");
-            System.out.println("Plant soilhumidity: " + plant.getState()[0]);
-        }
-
         return needsWater;
     }
 
@@ -183,13 +178,13 @@ public class ClientApp {
         while (!terminate) {
             try {
                 Socket client = serverSocket.accept();
-                System.out.println("New client connected");
+                debugLog("New Client Detected");
 
                 //Launches each client on a new thread that handles the request.
                 ClientHandler clientHandler = new ClientHandler(client);
                 clientHandler.startThread();
             } catch (Exception e) {
-                System.out.println(e.getMessage());
+                debugLog(e.getMessage());
             }
         }
     }
@@ -208,11 +203,16 @@ public class ClientApp {
         return amountOfPlants + "::" + protocolString;
     }
 
+    public void debugLog(String message){
+        if (settings.isDebugMode()){
+            System.out.println(message);
+        }
+    }
+
     public void closeServer() {
         synchronized (lockClose) {
             if (!terminate) {
                 terminate = true;
-                //TODO close communication with all clients. Close polling thread? close serverSocket?
             }
         }
     }
@@ -232,12 +232,12 @@ public class ClientApp {
                 int id = Integer.parseInt(String.valueOf(plant.get("id")));
                 boolean enable = (Boolean) plant.get("enable");
                 double openWaterFlowSec = Double.parseDouble(String.valueOf(plant.get("openWaterFlowSec")));
+                double waterTankHeight = Double.parseDouble(String.valueOf(plant.get("waterTankHeight")));
 
-                Plant newPlant = new Plant(ip, port, pollDelaySec, soilHumidLimit, alias, id, enable, openWaterFlowSec);
+                Plant newPlant = new Plant(ip, port, pollDelaySec, soilHumidLimit, alias, id, enable, openWaterFlowSec, waterTankHeight);
                 plants.put(id, newPlant);
             }
         } catch (Exception e) {
-            e.printStackTrace();
             throw new Exception(e.getMessage());
         }
     }
@@ -247,13 +247,12 @@ public class ClientApp {
             JSONParser parser = new JSONParser();
             JSONObject plant = (JSONObject) parser.parse(new FileReader(config_JSON));
 
-            boolean debugMode = Boolean.parseBoolean(String.valueOf(plant.get("debugMode")));
+            boolean debugMode = (Boolean) (plant.get("debugMode"));
             String alias = (String) plant.get("hubAlias");
 
             settings = new Settings(debugMode, alias);
 
         } catch (Exception e) {
-            e.printStackTrace();
             throw new Exception(e.getMessage());
         }
     }
@@ -263,6 +262,20 @@ public class ClientApp {
             System.out.println("\n\n=== ALL Plants ===");
             for (int key : plants.keySet()) {
                 System.out.println(plants.get(key).getPlantInfo());
+                System.out.println("\n\n");
+            }
+            System.out.println("====================\n\n");
+        }
+    }
+
+    private void printPresentPlants() {
+        if (!plants.isEmpty()) {
+            System.out.println("\n\n=== ALL Plants ===");
+            for (int key : plants.keySet()) {
+                if (plants.get(key).isPresent()){
+                    System.out.println(plants.get(key).getPlantInfo());
+                    System.out.println("\n");
+                }
             }
             System.out.println("====================\n\n");
         }
