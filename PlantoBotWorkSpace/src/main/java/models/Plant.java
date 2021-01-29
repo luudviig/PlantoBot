@@ -33,7 +33,7 @@ public class Plant {
     private double distanceToWater;
 
 
-    public Plant(String ip, int port, int pollDelaySec, SoilHumidityLimit soilHumidLimit, String alias, int id, boolean enabled, double openWaterFlowSec, double waterTankHeight) {
+    public Plant(String ip, int port, int pollDelaySec, SoilHumidityLimit soilHumidLimit, String alias, int id, boolean enabled, double openWaterFlowSec, double waterTankHeight, String lastWatered) {
         this.ip = ip;
         this.port = port;
         this.pollDelaySec = pollDelaySec;
@@ -41,7 +41,7 @@ public class Plant {
         this.alias = alias;
         this.id = id;
         this.lastPollTime = 0;
-        this.lastWatered = 0;
+        this.lastWatered = simpleDateToMillis(lastWatered);
         this.isPresent = false;
         this.enabled = enabled;
         this.openWaterFlowSec = openWaterFlowSec;
@@ -94,13 +94,15 @@ public class Plant {
 
     public void water() throws Exception {
         //Different limits for testing.
-        //long limitDay = 86_400 * 1000;
+        long limitDay = 86_400 * 1000;
         //long halfDay = limitDay / 2;
+        //long limit3Hours = 10800 *1000;
         //long limit5Minutes =300*1000;
         //long limit10Minutes = 600*1000;
-        long limit10Seconds = 10*1000;
+        //long limit10Seconds = 10*1000;
+
         try {
-            if (!calculateWaterTankEmpty() && (System.currentTimeMillis() - lastWatered >= limit10Seconds)) { //This makes so the plant is only allowed to be watered once in 24h.
+            if (!calculateWaterTankEmpty() && (System.currentTimeMillis() - lastWatered >= limitDay)) { //This makes so the plant is only allowed to be watered once in 24h.
                 ClientApp.getInstance().debugLog("Watering plant. " + lastMillisToSimpleDate(System.currentTimeMillis()));
 
                 String[] response = sendCommand("{\"command\":1005, \"openWaterFlowSec\":" + this.openWaterFlowSec + "}").split("::");
@@ -134,6 +136,15 @@ public class Plant {
         String pattern = "yyyy-MM-dd HH:mm";
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
         return simpleDateFormat.format(resultDate);
+    }
+
+    private long simpleDateToMillis(String date){
+        try {
+            Date simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm").parse(date);
+            return simpleDateFormat.getTime();
+        }catch (Exception e){
+            return 0;
+        }
     }
 
     public boolean isWaterTankEmpty() {

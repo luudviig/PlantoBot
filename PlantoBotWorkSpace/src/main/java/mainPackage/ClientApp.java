@@ -1,5 +1,7 @@
 package mainPackage;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import communicationResources.ClientHandler;
 import models.Plant;
 import models.Settings;
@@ -10,6 +12,7 @@ import org.json.simple.parser.JSONParser;
 
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
@@ -66,7 +69,7 @@ public class ClientApp {
     }
 
     public void startServer() {
-        System.out.println("Server Started \n");
+        debugLog("---SERVER STARTED---\n");
         try {
             //Read from files
             readPlantsFile();
@@ -83,7 +86,6 @@ public class ClientApp {
             //Wait from input from android
             inputFromClients();
         } catch (Exception e) {
-            e.printStackTrace();
             debugLog(e.getMessage());
         }
     }
@@ -134,17 +136,17 @@ public class ClientApp {
                                     }
                                     if (needsWatering(plant)) {
                                         plant.water();
-                                        printPresentPlants();
+                                        updateLastWateredInJson(plant.getId(), String.valueOf(plant.lastMillisToSimpleDate(plant.getLastWatered())));
                                     }
                                 }
                             } catch (Exception e) {
                                 debugLog("Problem polling the plant");
                             }
+                            printPresentPlants();
                         }
                     }
                 }
             }
-
             try {
                 Thread.sleep(50);
             } catch (Exception e) {
@@ -203,8 +205,8 @@ public class ClientApp {
         return amountOfPlants + "::" + protocolString;
     }
 
-    public void debugLog(String message){
-        if (settings.isDebugMode()){
+    public void debugLog(String message) {
+        if (settings.isDebugMode()) {
             System.out.println(message);
         }
     }
@@ -214,6 +216,28 @@ public class ClientApp {
             if (!terminate) {
                 terminate = true;
             }
+        }
+    }
+
+    private void updateLastWateredInJson(int plantID, String newDate) throws Exception {
+        try {
+            JSONParser parser = new JSONParser();
+            JSONArray array = (JSONArray) parser.parse(new FileReader(plants_JSON));
+            for (Object object : array) {
+                JSONObject plant = (JSONObject) object;
+                if ((Long) plant.get("id") == plantID) {
+                    plant.put("lastWatered", newDate);
+                    break;
+                }
+            }
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            String prettyJson = gson.toJson(array);
+            try (FileWriter writer = new FileWriter(plants_JSON)) {
+                writer.write(prettyJson);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new Exception(e.getMessage());
         }
     }
 
@@ -233,8 +257,9 @@ public class ClientApp {
                 boolean enable = (Boolean) plant.get("enable");
                 double openWaterFlowSec = Double.parseDouble(String.valueOf(plant.get("openWaterFlowSec")));
                 double waterTankHeight = Double.parseDouble(String.valueOf(plant.get("waterTankHeight")));
+                String lastWatered = (String) plant.get("lastWatered");
 
-                Plant newPlant = new Plant(ip, port, pollDelaySec, soilHumidLimit, alias, id, enable, openWaterFlowSec, waterTankHeight);
+                Plant newPlant = new Plant(ip, port, pollDelaySec, soilHumidLimit, alias, id, enable, openWaterFlowSec, waterTankHeight, lastWatered);
                 plants.put(id, newPlant);
             }
         } catch (Exception e) {
@@ -259,31 +284,30 @@ public class ClientApp {
 
     private void printAllPlants() {
         if (!plants.isEmpty()) {
-            System.out.println("\n\n=== ALL Plants ===");
+            debugLog("\n\n=== ALL Plants ===");
             for (int key : plants.keySet()) {
-                System.out.println(plants.get(key).getPlantInfo());
-                System.out.println("\n\n");
+                debugLog(plants.get(key).getPlantInfo());
+                debugLog("\n\n");
             }
-            System.out.println("====================\n\n");
+            debugLog("====================\n\n");
         }
     }
 
     private void printPresentPlants() {
         if (!plants.isEmpty()) {
-            System.out.println("\n\n=== ALL Plants ===");
+            debugLog("\n\n=== ALL Plants ===");
             for (int key : plants.keySet()) {
-                if (plants.get(key).isPresent()){
-                    System.out.println(plants.get(key).getPlantInfo());
-                    System.out.println("\n");
+                if (plants.get(key).isPresent()) {
+                    debugLog(plants.get(key).getPlantInfo() + "\n");
                 }
             }
-            System.out.println("====================\n\n");
+            debugLog("====================\n\n");
         }
     }
 
     private void printSettings() {
-        System.out.println("\n\n=== SETTINGS ===");
-        System.out.println(settings.printSettingsInfo());
-        System.out.println("=================\n\n");
+        debugLog("\n\n=== SETTINGS ===");
+        debugLog(settings.printSettingsInfo());
+        debugLog("=================\n\n");
     }
 }
