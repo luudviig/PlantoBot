@@ -10,7 +10,6 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
-import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.net.ServerSocket;
@@ -30,12 +29,12 @@ public class ClientApp {
     //TODO Fix so when a client connects it has 2seconds to send a request according to the protocol or it is thrown out.
 
     // When run from IDE
-    private static final String plants_JSON = (new File(System.getProperty("user.dir")).getParentFile().getPath()).concat("/plants.json");
-    private static final String config_JSON = (new File(System.getProperty("user.dir")).getParentFile().getPath()).concat("/config.json");
+    //private static final String plants_JSON = (new File(System.getProperty("user.dir")).getParentFile().getPath()).concat("/plants.json");
+    //private static final String config_JSON = (new File(System.getProperty("user.dir")).getParentFile().getPath()).concat("/config.json");
 
     // When run as JAR on Linux
-    //private static final String plants_JSON = "./plants.json";
-    //private static final String config_JSON = "./config.json";
+    private static final String plants_JSON = "./plants.json";
+    private static final String config_JSON = "./config.json";
 
 
     private static ClientApp instance = null;
