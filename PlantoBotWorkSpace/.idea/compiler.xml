@@ -10,7 +10,7 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="PlantoBotWorkSpace" target="15" />
+      <module name="PlantoBotWorkSpace" target="8" />
     </bytecodeTargetLevel>
   </component>
 </project>
