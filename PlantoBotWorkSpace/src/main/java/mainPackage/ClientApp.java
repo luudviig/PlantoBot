@@ -68,7 +68,7 @@ public class ClientApp {
     }
 
     public void startServer() {
-        debugLog("---SERVER STARTED---\n");
+        System.out.println("---SERVER STARTED---\n");
         try {
             //Read from files
             readPlantsFile();
@@ -85,6 +85,7 @@ public class ClientApp {
             //Wait from input from android
             inputFromClients();
         } catch (Exception e) {
+            e.printStackTrace();
             debugLog(e.getMessage());
         }
     }
@@ -158,17 +159,17 @@ public class ClientApp {
         boolean needsWater = false;
         if (plant.getSoilHumidLimit().equals(SoilHumidityLimit.DRY)) {
             //DRY
-            if (plant.getState()[0] <= 150) {
+            if (plant.getState()[0] <= plant.getDryLimit()) {
                 needsWater = true;
             }
         } else if (plant.getSoilHumidLimit().equals(SoilHumidityLimit.MOIST)) {
             //MOIST
-            if (plant.getState()[0] <= 610) {
+            if (plant.getState()[0] <= plant.getMoistLimit()) {
                 needsWater = true;
             }
         } else if (plant.getSoilHumidLimit().equals(SoilHumidityLimit.WET)) {
             //WET
-            if (plant.getState()[0] <= 800) {
+            if (plant.getState()[0] <= plant.getWetLimit()) {
                 needsWater = true;
             }
         }
@@ -179,7 +180,7 @@ public class ClientApp {
         while (!terminate) {
             try {
                 Socket client = serverSocket.accept();
-                debugLog("New Client Detected");
+                debugLog("New Client Detected: " + client.getInetAddress().toString().split("/")[1]);
 
                 //Launches each client on a new thread that handles the request.
                 ClientHandler clientHandler = new ClientHandler(client);
@@ -257,12 +258,18 @@ public class ClientApp {
                 double openWaterFlowSec = Double.parseDouble(String.valueOf(plant.get("openWaterFlowSec")));
                 double waterTankHeight = Double.parseDouble(String.valueOf(plant.get("waterTankHeight")));
                 String lastWatered = (String) plant.get("lastWatered");
+                double maxWatersPerDay = Double.parseDouble(String.valueOf(plant.get("maxWatersPerDay")));
+                double wetLimit = Double.parseDouble(String.valueOf(plant.get("wetLimit")));
+                double moistLimit = Double.parseDouble(String.valueOf(plant.get("moistLimit")));
+                double dryLimit = Double.parseDouble(String.valueOf(plant.get("dryLimit")));
 
-                Plant newPlant = new Plant(ip, port, pollDelaySec, soilHumidLimit, alias, id, enable, openWaterFlowSec, waterTankHeight, lastWatered);
+                Plant newPlant = new Plant(ip, port, pollDelaySec, soilHumidLimit, alias, id, enable, openWaterFlowSec, waterTankHeight,
+                        lastWatered, maxWatersPerDay, wetLimit, moistLimit, dryLimit);
                 plants.put(id, newPlant);
             }
         } catch (Exception e) {
-            throw new Exception(e.getMessage());
+            e.printStackTrace();
+            throw new Exception("Problem reading plants file");
         }
     }
 
@@ -274,10 +281,10 @@ public class ClientApp {
             boolean debugMode = (Boolean) (plant.get("debugMode"));
             String alias = (String) plant.get("hubAlias");
 
-            settings = new Settings(debugMode, alias);
+            settings = new Settings(debugMode, alias, System.currentTimeMillis());
 
         } catch (Exception e) {
-            throw new Exception(e.getMessage());
+            throw new Exception("Problems reading settings file");
         }
     }
 

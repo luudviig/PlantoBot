@@ -31,14 +31,12 @@ public class ClientHandler {
             output = new BufferedWriter(new OutputStreamWriter(this.client.getOutputStream()));
 
             String messageFromClient = input.readLine();
-            System.out.println("Message from client: " + messageFromClient);
             String[] command = messageFromClient.split("::");
 
             switch (command[0]) {
                 case "1000":
                     //Client requests information about plants
                     String messageToClient = "1001::" + ClientApp.getInstance().getPlantInformationToProto();
-                    System.out.println("Message to client: " + messageToClient);
                     output.write(messageToClient.concat("\n"));
                     output.flush();
                     break;

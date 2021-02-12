@@ -31,9 +31,14 @@ public class Plant {
     private volatile boolean waterTankEmpty;
     private double waterTankHeight;
     private double distanceToWater;
+    private double maxWatersPerDay;
+    private double wetLimit;
+    private double moistLimit;
+    private double dryLimit;
 
 
-    public Plant(String ip, int port, int pollDelaySec, SoilHumidityLimit soilHumidLimit, String alias, int id, boolean enabled, double openWaterFlowSec, double waterTankHeight, String lastWatered) {
+    public Plant(String ip, int port, int pollDelaySec, SoilHumidityLimit soilHumidLimit, String alias, int id, boolean enabled, double openWaterFlowSec, double waterTankHeight, String lastWatered
+            , double maxWatersPerDay, double wetLimit, double moistLimit, double dryLimit) {
         this.ip = ip;
         this.port = port;
         this.pollDelaySec = pollDelaySec;
@@ -49,6 +54,10 @@ public class Plant {
         this.waterTankEmpty = false;
         this.waterTankHeight = waterTankHeight;
         this.distanceToWater = 0;
+        this.maxWatersPerDay = maxWatersPerDay;
+        this.wetLimit = wetLimit;
+        this.moistLimit = moistLimit;
+        this.dryLimit = dryLimit;
     }
 
     public void poll() {
@@ -93,16 +102,10 @@ public class Plant {
     }
 
     public void water() throws Exception {
-        //Different limits for testing.
-        long limitDay = 86_400 * 1000;
-        //long halfDay = limitDay / 2;
-        //long limit3Hours = 10800 *1000;
-        //long limit5Minutes =300*1000;
-        //long limit10Minutes = 600*1000;
-        //long limit10Seconds = 10*1000;
+        double limitDay = (86_400 * 1000) / maxWatersPerDay;
 
         try {
-            if (!calculateWaterTankEmpty() && (System.currentTimeMillis() - lastWatered >= limitDay)) { //This makes so the plant is only allowed to be watered once in 24h.
+            if (!calculateWaterTankEmpty() && (System.currentTimeMillis() - lastWatered >= limitDay)) {
                 ClientApp.getInstance().debugLog("Watering plant. " + lastMillisToSimpleDate(System.currentTimeMillis()));
 
                 String[] response = sendCommand("{\"command\":1005, \"openWaterFlowSec\":" + this.openWaterFlowSec + "}").split("::");
@@ -138,13 +141,37 @@ public class Plant {
         return simpleDateFormat.format(resultDate);
     }
 
-    private long simpleDateToMillis(String date){
+    private long simpleDateToMillis(String date) {
         try {
             Date simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm").parse(date);
             return simpleDateFormat.getTime();
-        }catch (Exception e){
+        } catch (Exception e) {
             return 0;
         }
+    }
+
+    public double getWetLimit() {
+        return wetLimit;
+    }
+
+    public void setWetLimit(double wetLimit) {
+        this.wetLimit = wetLimit;
+    }
+
+    public double getMoistLimit() {
+        return moistLimit;
+    }
+
+    public void setMoistLimit(double moistLimit) {
+        this.moistLimit = moistLimit;
+    }
+
+    public double getDryLimit() {
+        return dryLimit;
+    }
+
+    public void setDryLimit(double dryLimit) {
+        this.dryLimit = dryLimit;
     }
 
     public boolean isWaterTankEmpty() {
@@ -280,7 +307,9 @@ public class Plant {
     }
 
     public String toHosoProtocol() {
-        return id + "::" + alias + "::" + lastMillisToSimpleDate(lastWatered) + "::" + lastMillisToSimpleDate(lastPollTime) + "::" + stateToProto() + "::" + ClientApp.getInstance().settings.getAlias() + "::" + waterTankEmpty;
+        return id + "::" + alias + "::" + lastMillisToSimpleDate(lastWatered) + "::"
+                + lastMillisToSimpleDate(lastPollTime) + "::" + stateToProto() + "::" + ClientApp.getInstance().settings.getAlias()
+                + "::" + waterTankEmpty + "::" + ClientApp.getInstance().settings.getActiveSince();
     }
 
     public String stateToProto() {
