@@ -1,6 +1,5 @@
 # **PlantoBot**
-
-Automatic system that tracks humidity, soil humidity, temperature, and more of the plants in your home.
+Self-sufficient system that tracks humidity, soil humidity, temperature, and more of the plants in your home.
 
 ## **Intended to be used with:**
 
